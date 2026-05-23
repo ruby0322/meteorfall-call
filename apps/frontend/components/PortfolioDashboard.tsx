@@ -5,11 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { AllocationPieChart } from "@/components/AllocationPieChart";
 import { PortfolioHistoryChart } from "@/components/PortfolioHistoryChart";
+import { PortfolioSnapshotExport } from "@/components/PortfolioSnapshotExport";
 import {
   ALLOCATABLE_CURRENCIES,
   createPortfolio,
   fetchPortfolio,
   fetchPortfolioHistory,
+  fetchPortfolioSnapshot,
   formatUsd,
   previewPortfolioHoldings,
   getStoredPortfolioId,
@@ -64,6 +66,7 @@ export function PortfolioDashboard() {
   > | null>(null);
   const [showCalc, setShowCalc] = useState(false);
   const [history, setHistory] = useState<Awaited<ReturnType<typeof fetchPortfolioHistory>> | null>(null);
+  const [snapshot, setSnapshot] = useState<Awaited<ReturnType<typeof fetchPortfolioSnapshot>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -88,8 +91,10 @@ export function PortfolioDashboard() {
         setPortfolio(data);
         setDraft(holdingsToDraftWeights(data.holdings_detail));
         const chart = await fetchPortfolioHistory(data.id, 30);
+        const exportSnapshot = await fetchPortfolioSnapshot(data.id);
         if (!cancelled) {
           setHistory(chart);
+          setSnapshot(exportSnapshot);
         }
       } catch (err) {
         if (cancelled) {
@@ -153,6 +158,7 @@ export function PortfolioDashboard() {
       setPreviewOpen(false);
       setPreviewResult(null);
       setHistory(await fetchPortfolioHistory(updated.id, 30));
+      setSnapshot(await fetchPortfolioSnapshot(updated.id));
     } catch (err) {
       if (err instanceof ApiError) {
         setError("Could not save allocation. Check weights sum to 100%.");
@@ -461,6 +467,8 @@ export function PortfolioDashboard() {
       ) : (
         <div className="h-48 animate-pulse rounded-lg bg-zinc-900/40" />
       )}
+
+      <PortfolioSnapshotExport snapshot={snapshot} />
     </div>
   );
 }

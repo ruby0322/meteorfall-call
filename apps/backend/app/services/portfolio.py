@@ -428,3 +428,18 @@ def portfolio_history_response(
         previous_value = value
 
     return {"points": points, "rebalance_markers": sorted(set(markers))}
+
+
+def portfolio_snapshot_response(
+    portfolio: Portfolio,
+    frankfurter: FrankfurterClientProtocol,
+) -> dict:
+    current = portfolio_to_response(portfolio, frankfurter)
+    return {
+        "as_of": current["rates_date"],
+        "total_value_usd": current["total_value_usd"],
+        "daily_pl_usd": current["daily_pl_usd"],
+        "cumulative_pl_usd": current["cumulative_pl_usd"],
+        "holdings": current["holdings_detail"],
+        "disclaimer": "Simulation only. Not investment advice.",
+    }

@@ -68,3 +68,12 @@ class PortfolioHistoryPointResponse(BaseModel):
 class PortfolioHistoryResponse(BaseModel):
     points: list[PortfolioHistoryPointResponse]
     rebalance_markers: list[str]
+
+
+class PortfolioSnapshotResponse(BaseModel):
+    as_of: str | None
+    total_value_usd: float
+    daily_pl_usd: float
+    cumulative_pl_usd: float
+    holdings: list[HoldingDetailResponse]
+    disclaimer: str

@@ -6,6 +6,7 @@ from app.api.deps.db import DbSession
 from app.schemas.portfolio import (
     PortfolioHistoryResponse,
     PortfolioResponse,
+    PortfolioSnapshotResponse,
     PreviewHoldingsResponse,
     UpdateHoldingsRequest,
 )
@@ -14,6 +15,7 @@ from app.services.portfolio import (
     create_default_portfolio,
     get_portfolio_or_404,
     portfolio_history_response,
+    portfolio_snapshot_response,
     portfolio_to_response,
     preview_portfolio_holdings,
     update_portfolio_holdings,
@@ -78,3 +80,13 @@ def portfolio_history(
 ) -> dict:
     portfolio = get_portfolio_or_404(db, portfolio_id)
     return portfolio_history_response(portfolio, days, frankfurter)
+
+
+@router.get("/portfolio/{portfolio_id}/snapshot", response_model=PortfolioSnapshotResponse)
+def portfolio_snapshot(
+    portfolio_id: str,
+    db: DbSession,
+    frankfurter: Annotated[FrankfurterClientProtocol, Depends(get_frankfurter)],
+) -> dict:
+    portfolio = get_portfolio_or_404(db, portfolio_id)
+    return portfolio_snapshot_response(portfolio, frankfurter)

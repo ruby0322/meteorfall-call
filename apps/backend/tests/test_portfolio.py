@@ -298,3 +298,35 @@ def test_history_cumulative_pl_matches_total_minus_initial() -> None:
     assert len(points) >= 2
     last = points[-1]
     assert last["cumulative_pl_usd"] == round(last["total_value_usd"] - 10000.0, 2)
+
+
+def test_snapshot_endpoint_returns_export_payload() -> None:
+    app, mock_client = make_test_app()
+    current_day = date.today().isoformat()
+    prior_day = (date.today() - timedelta(days=1)).isoformat()
+    mock_client.fetch_latest.return_value = {
+        "amount": 1.0,
+        "base": "USD",
+        "date": current_day,
+        "rates": {"EUR": 0.90},
+    }
+    mock_client.fetch_history.return_value = {
+        "amount": 1.0,
+        "base": "USD",
+        "rates": {prior_day: {"EUR": 0.91}, current_day: {"EUR": 0.90}},
+    }
+
+    client = TestClient(app)
+    created = client.post("/v1/portfolio").json()
+    portfolio_id = created["id"]
+    client.put(
+        f"/v1/portfolio/{portfolio_id}/holdings",
+        json={"holdings": [{"currency_code": "EUR", "weight_percent": 100.0}]},
+    )
+    snapshot = client.get(f"/v1/portfolio/{portfolio_id}/snapshot")
+
+    assert snapshot.status_code == 200
+    body = snapshot.json()
+    assert body["as_of"] == current_day
+    assert "simulation" in body["disclaimer"].lower()
+    assert len(body["holdings"]) == 1

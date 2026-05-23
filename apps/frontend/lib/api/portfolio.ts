@@ -52,6 +52,15 @@ export type PortfolioHistoryResponse = {
   rebalance_markers: string[];
 };
 
+export type PortfolioSnapshotResponse = {
+  as_of: string | null;
+  total_value_usd: number;
+  daily_pl_usd: number;
+  cumulative_pl_usd: number;
+  holdings: HoldingDetail[];
+  disclaimer: string;
+};
+
 const PORTFOLIO_STORAGE_KEY = "marketmage-portfolio-id";
 
 export function getStoredPortfolioId(): string | null {
@@ -100,6 +109,10 @@ export async function fetchPortfolioHistory(
   days = 30,
 ): Promise<PortfolioHistoryResponse> {
   return apiFetch<PortfolioHistoryResponse>(`/v1/portfolio/${portfolioId}/history?days=${days}`);
+}
+
+export async function fetchPortfolioSnapshot(portfolioId: string): Promise<PortfolioSnapshotResponse> {
+  return apiFetch<PortfolioSnapshotResponse>(`/v1/portfolio/${portfolioId}/snapshot`);
 }
 
 export function formatUsd(value: number): string {

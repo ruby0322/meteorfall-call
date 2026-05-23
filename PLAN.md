@@ -39,9 +39,9 @@ Topic 1 — **MarketMage** (FX dashboard brief; upstream: Frankfurter)
 
 - Asked: **AI 24h prediction engine @ 99% accuracy** → I'm proposing: **Trend insight panel** with computed 7d/30d % change and period high/low, labeled "historical — not a forecast" → Why: Helps users feel market direction from facts we actually have, without fabricated AI accuracy.
 
-- Asked: **AI-managed portfolio with daily P/L curve** → I'm proposing: **Paper portfolio** ($10k virtual, manual allocation, daily mark-to-market P/L from rate changes only, user-initiated rebalance with preview) → Why: Teaches exposure math without automated trading or leverage.
+- Asked: **AI-managed portfolio with daily P/L curve** → I'm proposing: **Paper portfolio** ($10k virtual, manual allocation, true daily MTM P/L vs prior ECB business day, plus historical value/P/L curve from reference rates) → Why: Teaches exposure math from factual data without automated trading or leverage.
 
-- Asked: **One-click auto-rebalance YOLO** → I'm proposing: **Manual rebalance** with allocation % preview and confirm step → Why: Same "adjust my exposure" intent; user stays in control.
+- Asked: **One-click auto-rebalance YOLO** → I'm proposing: **Manual rebalance** with slider/trade-amount controls, allocation pie preview, and confirm step → Why: Same "adjust my exposure" intent; user stays in control.
 
 - Asked: **TradingView candlestick chart** → I'm proposing: **30-day normalized daily line chart** (% change from period start, shared scale) → Why: Only daily series exists; still answers "how did this pair move this month?"
 
@@ -60,10 +60,12 @@ Research identified a gap: travelers and students need **honest daily FX orienta
 1. **BE Frankfurter proxy** — `GET /v1/rates/latest`, `GET /v1/rates/history`, `GET /v1/currencies`; in-memory TTL cache; per-IP rate limit on proxy routes.
 2. **Rate board UI** — USD → EUR, JPY, GBP, CNY, SGD with last-updated date; TWD shown as unsupported with explanation.
 3. **30-day trend chart** — Normalized % change line chart; null/holiday gaps handled.
-4. **Paper portfolio (Postgres)** — Create $10k virtual portfolio, manual holdings allocation, daily MTM P/L vs prior business day.
-5. **Manual rebalance flow** — Edit allocations with validation (weights sum to 100%) and preview before save.
-6. **One-command run** — `docker compose up --build` (postgres + backend + frontend); local alt `npm run dev`.
-7. **Tests** — pytest on BE: rates cache behavior + portfolio MTM calculation; committed before impl (TDD).
+4. **Paper portfolio (Postgres)** — Create $10k virtual portfolio, MTM-based allocation updates, true daily MTM P/L vs prior ECB business day, and holdings-level USD breakdown.
+5. **Manual rebalance flow** — Slider/trade-amount inputs, allocation pie preview, API-backed preview modal, and confirm-before-save.
+6. **Portfolio value history** — 30-day portfolio value + daily/cumulative P/L series from Frankfurter business-day history with rebalance markers.
+7. **Snapshot export** — Copy portfolio snapshot as JSON/markdown (simulation only disclaimer).
+8. **One-command run** — `docker compose up --build` (postgres + backend + frontend); local alt `npm run dev`.
+9. **Tests** — pytest on BE: rates cache behavior + portfolio MTM calculation; committed before impl (TDD).
 
 ### Stretch (Option C — if time remains)
 
