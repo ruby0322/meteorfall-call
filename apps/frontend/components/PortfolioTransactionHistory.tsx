@@ -10,7 +10,6 @@ import {
 const EVENT_LABELS: Record<PortfolioTransaction["event_type"], string> = {
   initial: "Initial allocation",
   rebalance: "Rebalance",
-  base_currency_switch: "Base currency switch",
 };
 
 function formatTimestamp(value: string): string {
@@ -51,7 +50,7 @@ export function PortfolioTransactionHistory({
       <div>
         <h3 className="text-lg font-semibold text-zinc-50">Transaction history</h3>
         <p className="text-sm text-zinc-400">
-          Rebalances and base-currency changes recorded for this paper portfolio.
+          Rebalance events recorded for this paper portfolio.
         </p>
       </div>
 
@@ -83,9 +82,9 @@ export function PortfolioTransactionHistory({
                 </div>
                 <div className="text-right">
                   <p className="font-mono text-sm text-emerald-400">
-                    {formatMoney(transaction.total_value_usd, transaction.base_currency)}
+                    {formatMoney(transaction.total_value_usd, baseCurrency)}
                   </p>
-                  <p className="text-xs text-zinc-500">Base {transaction.base_currency}</p>
+                  <p className="text-xs text-zinc-500">In {baseCurrency}</p>
                 </div>
               </button>
 
@@ -112,7 +111,7 @@ export function PortfolioTransactionHistory({
                     </table>
                   </div>
                   <p className="mt-2 text-xs text-zinc-500">
-                    Values shown in {transaction.base_currency} at time of event.
+                    Quantities at time of event; totals converted to current {baseCurrency} rates.
                   </p>
                 </div>
               ) : null}

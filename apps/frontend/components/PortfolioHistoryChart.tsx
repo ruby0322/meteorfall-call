@@ -79,7 +79,6 @@ export function PortfolioHistoryChart({
       </p>
       <div className="flex flex-wrap gap-4 text-xs text-zinc-400">
         <span>Latest daily P/L: {formatMoney(last.daily_pl_usd, baseCurrency)}</span>
-        <span>Cumulative P/L: {formatMoney(last.cumulative_pl_usd, baseCurrency)}</span>
       </div>
     </section>
   );

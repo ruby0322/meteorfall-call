@@ -236,11 +236,6 @@ export function PortfolioDashboard() {
             {formatMoney(portfolio.daily_pl_usd, portfolio.base_currency)}
           </p>
           <p className="mt-1 text-xs text-zinc-500">Prior date: {portfolio.prior_rates_date ?? "N/A"}</p>
-          <p className="mt-2 text-xs uppercase tracking-wider text-zinc-500">Cumulative P/L</p>
-          <p className={portfolio.cumulative_pl_usd >= 0 ? "text-emerald-400" : "text-rose-400"}>
-            {portfolio.cumulative_pl_usd >= 0 ? "+" : ""}
-            {formatMoney(portfolio.cumulative_pl_usd, portfolio.base_currency)}
-          </p>
           <button
             type="button"
             className="mt-2 text-xs text-emerald-400/80 underline-offset-2 hover:underline"

@@ -115,7 +115,6 @@ def test_create_portfolio_starts_with_ten_thousand_usd() -> None:
     assert body["base_currency"] == "USD"
     assert body["total_value_usd"] == 10000.0
     assert body["daily_pl_usd"] == 0.0
-    assert body["cumulative_pl_usd"] == 0.0
     assert body["holdings"][0]["currency_code"] == "USD"
     assert body["holdings"][0]["weight_percent"] == 100.0
 
@@ -296,41 +295,6 @@ def test_history_segments_across_rebalance() -> None:
     assert current_day in body["rebalance_markers"]
     assert len(body["points"]) >= 1
     assert body["points"][-1]["date"] == current_day
-
-
-def test_history_cumulative_pl_matches_total_minus_initial() -> None:
-    app, mock_client = make_test_app()
-    current_day = date.today().isoformat()
-    prior_day = (date.today() - timedelta(days=1)).isoformat()
-    mock_client.fetch_latest.return_value = {
-        "amount": 1.0,
-        "base": "USD",
-        "date": current_day,
-        "rates": {"EUR": 0.90},
-    }
-    mock_client.fetch_history.return_value = {
-        "amount": 1.0,
-        "base": "USD",
-        "rates": {
-            prior_day: {"EUR": 0.92},
-            current_day: {"EUR": 0.90},
-        },
-    }
-
-    client = TestClient(app)
-    created = client.post("/v1/portfolio").json()
-    portfolio_id = created["id"]
-    client.put(
-        f"/v1/portfolio/{portfolio_id}/holdings",
-        json={"holdings": [{"currency_code": "EUR", "weight_percent": 100.0}]},
-    )
-
-    history = client.get(f"/v1/portfolio/{portfolio_id}/history", params={"days": 30})
-    assert history.status_code == 200
-    points = history.json()["points"]
-    assert len(points) >= 2
-    last = points[-1]
-    assert last["cumulative_pl_usd"] == round(last["total_value_usd"] - 10000.0, 2)
 
 
 def test_snapshot_endpoint_returns_export_payload() -> None:
@@ -631,7 +595,7 @@ def test_transactions_endpoint_returns_rebalance_events() -> None:
     assert len(body["transactions"][0]["holdings"]) == 2
 
 
-def test_transactions_labels_base_currency_switch() -> None:
+def test_transactions_excludes_base_currency_switch() -> None:
     app, mock_client = make_test_app()
 
     def latest_side_effect(base: str, symbols: list[str]) -> dict:
@@ -658,5 +622,38 @@ def test_transactions_labels_base_currency_switch() -> None:
 
     assert response.status_code == 200
     events = [item["event_type"] for item in response.json()["transactions"]]
-    assert events[0] == "base_currency_switch"
-    assert events[-1] == "initial"
+    assert "base_currency_switch" not in events
+    assert events == ["initial"]
+
+
+def test_transactions_values_use_current_portfolio_base() -> None:
+    app, mock_client = make_test_app()
+
+    def latest_side_effect(base: str, symbols: list[str]) -> dict:
+        if base == "EUR":
+            return {"amount": 1.0, "base": "EUR", "date": "2024-08-23", "rates": {"USD": 1.25}}
+        _ = symbols
+        return {"amount": 1.0, "base": "USD", "date": "2024-08-23", "rates": {}}
+
+    mock_client.fetch_latest.side_effect = latest_side_effect
+    mock_client.fetch_history.return_value = {
+        "amount": 1.0,
+        "base": "EUR",
+        "rates": {"2024-08-22": {"USD": 1.20}, "2024-08-23": {"USD": 1.25}},
+    }
+    client = TestClient(app)
+    created = client.post("/v1/portfolio").json()
+    portfolio_id = created["id"]
+
+    client.patch(
+        f"/v1/portfolio/{portfolio_id}/base-currency",
+        json={"base_currency": "EUR"},
+    )
+    response = client.get(f"/v1/portfolio/{portfolio_id}/transactions")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["base_currency"] == "EUR"
+    initial = body["transactions"][-1]
+    assert initial["base_currency"] == "EUR"
+    assert initial["total_value_usd"] == round(10000.0 / 1.25, 2)

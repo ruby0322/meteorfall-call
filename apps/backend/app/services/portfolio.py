@@ -27,7 +27,6 @@ class HistoryPoint(TypedDict):
     date: str
     total_value_usd: float
     daily_pl_usd: float
-    cumulative_pl_usd: float
 
 
 def compute_portfolio_value_in_base(
@@ -253,7 +252,6 @@ def portfolio_to_response(
             )
 
     daily_pl = round(total_value - prior_total_value, 2)
-    cumulative_pl = round(total_value - portfolio.initial_cash_usd, 2)
     holdings_detail = _build_holding_details(rows, total_value, rates, portfolio.base_currency)
 
     return {
@@ -262,7 +260,6 @@ def portfolio_to_response(
         "initial_cash_usd": portfolio.initial_cash_usd,
         "total_value_usd": total_value,
         "daily_pl_usd": daily_pl,
-        "cumulative_pl_usd": cumulative_pl,
         "rates_date": rates_date or portfolio.rates_date,
         "prior_rates_date": prior_rates_date,
         "holdings": [
@@ -467,7 +464,6 @@ def portfolio_history_response(
                 "date": day,
                 "total_value_usd": value,
                 "daily_pl_usd": daily_pl,
-                "cumulative_pl_usd": round(value - portfolio.initial_cash_usd, 2),
             }
         )
         previous_value = value
@@ -489,7 +485,6 @@ def portfolio_snapshot_response(
         "as_of": current["rates_date"],
         "total_value_usd": current["total_value_usd"],
         "daily_pl_usd": current["daily_pl_usd"],
-        "cumulative_pl_usd": current["cumulative_pl_usd"],
         "holdings": current["holdings_detail"],
         "disclaimer": "Simulation only. Not investment advice.",
     }
@@ -507,19 +502,51 @@ def _infer_transaction_event_type(
     return "rebalance"
 
 
-def portfolio_transactions_response(portfolio: Portfolio) -> dict:
+def _convert_total_to_base(
+    total_in_record_base: float,
+    record_base: str,
+    portfolio_base: str,
+    frankfurter: FrankfurterClientProtocol,
+    rate_cache: dict[str, dict[str, float]],
+) -> float:
+    if record_base == portfolio_base:
+        return round(total_in_record_base, 2)
+    if record_base not in rate_cache:
+        _, rates = fetch_latest_rates(frankfurter, portfolio_base, [record_base])
+        rate_cache[record_base] = rates
+    return compute_portfolio_value_in_base(
+        [{"currency_code": record_base, "quantity": total_in_record_base}],
+        rate_cache[record_base],
+        portfolio_base,
+    )
+
+
+def portfolio_transactions_response(
+    portfolio: Portfolio,
+    frankfurter: FrankfurterClientProtocol,
+) -> dict:
     records = sorted(portfolio.rebalance_records, key=lambda item: item.created_at)
+    rate_cache: dict[str, dict[str, float]] = {}
     transactions = []
     for index, record in enumerate(records):
         previous = records[index - 1] if index > 0 else None
         rows = _parse_snapshot_rows(record.holdings_json)
+        event_type = _infer_transaction_event_type(index, record, previous)
+        if event_type == "base_currency_switch":
+            continue
         transactions.append(
             {
                 "id": record.id,
-                "event_type": _infer_transaction_event_type(index, record, previous),
-                "base_currency": record.base_currency,
+                "event_type": event_type,
+                "base_currency": portfolio.base_currency,
                 "effective_rates_date": record.effective_rates_date,
-                "total_value_usd": record.total_value_usd,
+                "total_value_usd": _convert_total_to_base(
+                    record.total_value_usd,
+                    record.base_currency,
+                    portfolio.base_currency,
+                    frankfurter,
+                    rate_cache,
+                ),
                 "holdings": [
                     {
                         "currency_code": code,

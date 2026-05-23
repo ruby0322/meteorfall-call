@@ -102,9 +102,10 @@ def portfolio_snapshot(
 def portfolio_transactions(
     portfolio_id: str,
     db: DbSession,
+    frankfurter: Annotated[FrankfurterClientProtocol, Depends(get_frankfurter)],
 ) -> dict:
     portfolio = get_portfolio_or_404(db, portfolio_id)
-    return portfolio_transactions_response(portfolio)
+    return portfolio_transactions_response(portfolio, frankfurter)
 
 
 @router.patch("/portfolio/{portfolio_id}/base-currency", response_model=PortfolioResponse)

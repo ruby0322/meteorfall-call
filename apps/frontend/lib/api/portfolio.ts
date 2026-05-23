@@ -23,7 +23,6 @@ export type Portfolio = {
   initial_cash_usd: number;
   total_value_usd: number;
   daily_pl_usd: number;
-  cumulative_pl_usd: number;
   rates_date: string | null;
   prior_rates_date: string | null;
   holdings: Holding[];
@@ -46,7 +45,6 @@ export type PortfolioHistoryPoint = {
   date: string;
   total_value_usd: number;
   daily_pl_usd: number;
-  cumulative_pl_usd: number;
 };
 
 export type PortfolioHistoryResponse = {
@@ -60,7 +58,6 @@ export type PortfolioSnapshotResponse = {
   as_of: string | null;
   total_value_usd: number;
   daily_pl_usd: number;
-  cumulative_pl_usd: number;
   holdings: HoldingDetail[];
   disclaimer: string;
 };
@@ -73,7 +70,7 @@ export type PortfolioTransactionHolding = {
 
 export type PortfolioTransaction = {
   id: number;
-  event_type: "initial" | "rebalance" | "base_currency_switch";
+  event_type: "initial" | "rebalance";
   base_currency: string;
   effective_rates_date: string;
   total_value_usd: number;

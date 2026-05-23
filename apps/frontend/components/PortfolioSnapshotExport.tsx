@@ -11,7 +11,6 @@ function snapshotToMarkdown(snapshot: PortfolioSnapshotResponse, baseCurrency: s
     `- Base currency: ${baseCurrency}`,
     `- Total value: ${formatMoney(snapshot.total_value_usd, baseCurrency)}`,
     `- Daily P/L: ${formatMoney(snapshot.daily_pl_usd, baseCurrency)}`,
-    `- Cumulative P/L: ${formatMoney(snapshot.cumulative_pl_usd, baseCurrency)}`,
     "",
     "| Currency | Weight | Base Value | Quantity |",
     "| --- | ---: | ---: | ---: |",

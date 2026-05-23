@@ -64,7 +64,6 @@ class PortfolioResponse(BaseModel):
     initial_cash_usd: float
     total_value_usd: float
     daily_pl_usd: float
-    cumulative_pl_usd: float
     rates_date: str | None
     prior_rates_date: str | None
     holdings: list[HoldingResponse]
@@ -82,7 +81,6 @@ class PortfolioHistoryPointResponse(BaseModel):
     date: str
     total_value_usd: float
     daily_pl_usd: float
-    cumulative_pl_usd: float
 
 
 class PortfolioHistoryResponse(BaseModel):
@@ -96,7 +94,6 @@ class PortfolioSnapshotResponse(BaseModel):
     as_of: str | None
     total_value_usd: float
     daily_pl_usd: float
-    cumulative_pl_usd: float
     holdings: list[HoldingDetailResponse]
     disclaimer: str
 
