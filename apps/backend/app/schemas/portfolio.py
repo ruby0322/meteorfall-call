@@ -11,6 +11,24 @@ class HoldingInput(BaseModel):
         return value.upper()
 
 
+class CreatePortfolioRequest(BaseModel):
+    base_currency: str = Field(default="USD", min_length=3, max_length=3)
+
+    @field_validator("base_currency")
+    @classmethod
+    def uppercase_base_currency(cls, value: str) -> str:
+        return value.upper()
+
+
+class UpdateBaseCurrencyRequest(BaseModel):
+    base_currency: str = Field(min_length=3, max_length=3)
+
+    @field_validator("base_currency")
+    @classmethod
+    def uppercase_base_currency(cls, value: str) -> str:
+        return value.upper()
+
+
 class UpdateHoldingsRequest(BaseModel):
     holdings: list[HoldingInput] = Field(min_length=1)
 
@@ -42,6 +60,7 @@ class HoldingDeltaResponse(BaseModel):
 
 class PortfolioResponse(BaseModel):
     id: str
+    base_currency: str
     initial_cash_usd: float
     total_value_usd: float
     daily_pl_usd: float
@@ -53,6 +72,7 @@ class PortfolioResponse(BaseModel):
 
 
 class PreviewHoldingsResponse(BaseModel):
+    base_currency: str
     total_value_usd: float
     projected_holdings: list[HoldingDetailResponse]
     deltas: list[HoldingDeltaResponse]
@@ -66,11 +86,13 @@ class PortfolioHistoryPointResponse(BaseModel):
 
 
 class PortfolioHistoryResponse(BaseModel):
+    base_currency: str
     points: list[PortfolioHistoryPointResponse]
     rebalance_markers: list[str]
 
 
 class PortfolioSnapshotResponse(BaseModel):
+    base_currency: str
     as_of: str | None
     total_value_usd: float
     daily_pl_usd: float

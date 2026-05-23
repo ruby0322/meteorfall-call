@@ -19,6 +19,7 @@ export type HoldingDelta = {
 
 export type Portfolio = {
   id: string;
+  base_currency: string;
   initial_cash_usd: number;
   total_value_usd: number;
   daily_pl_usd: number;
@@ -35,6 +36,7 @@ export type AllocationInput = {
 };
 
 export type PreviewHoldingsResponse = {
+  base_currency: string;
   total_value_usd: number;
   projected_holdings: HoldingDetail[];
   deltas: HoldingDelta[];
@@ -48,11 +50,13 @@ export type PortfolioHistoryPoint = {
 };
 
 export type PortfolioHistoryResponse = {
+  base_currency: string;
   points: PortfolioHistoryPoint[];
   rebalance_markers: string[];
 };
 
 export type PortfolioSnapshotResponse = {
+  base_currency: string;
   as_of: string | null;
   total_value_usd: number;
   daily_pl_usd: number;
@@ -74,8 +78,12 @@ export function storePortfolioId(id: string): void {
   window.localStorage.setItem(PORTFOLIO_STORAGE_KEY, id);
 }
 
-export async function createPortfolio(): Promise<Portfolio> {
-  return apiFetch<Portfolio>("/v1/portfolio", { method: "POST" });
+export async function createPortfolio(baseCurrency = "USD"): Promise<Portfolio> {
+  return apiFetch<Portfolio>("/v1/portfolio", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_currency: baseCurrency }),
+  });
 }
 
 export async function fetchPortfolio(portfolioId: string): Promise<Portfolio> {
@@ -115,13 +123,29 @@ export async function fetchPortfolioSnapshot(portfolioId: string): Promise<Portf
   return apiFetch<PortfolioSnapshotResponse>(`/v1/portfolio/${portfolioId}/snapshot`);
 }
 
+export async function switchPortfolioBaseCurrency(
+  portfolioId: string,
+  baseCurrency: string,
+): Promise<Portfolio> {
+  return apiFetch<Portfolio>(`/v1/portfolio/${portfolioId}/base-currency`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ base_currency: baseCurrency }),
+  });
+}
+
 export function formatUsd(value: number): string {
+  return formatMoney(value, "USD");
+}
+
+export function formatMoney(value: number, currency: string): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
 }
 
 export const ALLOCATABLE_CURRENCIES = ["USD", "EUR", "JPY", "GBP", "CNY", "SGD"] as const;
+export const BASE_CURRENCY_OPTIONS = ALLOCATABLE_CURRENCIES;

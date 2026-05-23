@@ -4,10 +4,12 @@ from fastapi import APIRouter, Depends, Request, status
 
 from app.api.deps.db import DbSession
 from app.schemas.portfolio import (
+    CreatePortfolioRequest,
     PortfolioHistoryResponse,
     PortfolioResponse,
     PortfolioSnapshotResponse,
     PreviewHoldingsResponse,
+    UpdateBaseCurrencyRequest,
     UpdateHoldingsRequest,
 )
 from app.services.frankfurter import FrankfurterClientProtocol
@@ -18,6 +20,7 @@ from app.services.portfolio import (
     portfolio_snapshot_response,
     portfolio_to_response,
     preview_portfolio_holdings,
+    switch_portfolio_base_currency,
     update_portfolio_holdings,
 )
 
@@ -32,8 +35,9 @@ def get_frankfurter(request: Request) -> FrankfurterClientProtocol:
 def create_portfolio(
     db: DbSession,
     frankfurter: Annotated[FrankfurterClientProtocol, Depends(get_frankfurter)],
+    payload: CreatePortfolioRequest | None = None,
 ) -> dict:
-    portfolio = create_default_portfolio(db)
+    portfolio = create_default_portfolio(db, payload.base_currency if payload else "USD")
     return portfolio_to_response(portfolio, frankfurter)
 
 
@@ -90,3 +94,14 @@ def portfolio_snapshot(
 ) -> dict:
     portfolio = get_portfolio_or_404(db, portfolio_id)
     return portfolio_snapshot_response(portfolio, frankfurter)
+
+
+@router.patch("/portfolio/{portfolio_id}/base-currency", response_model=PortfolioResponse)
+def update_portfolio_base_currency(
+    portfolio_id: str,
+    payload: UpdateBaseCurrencyRequest,
+    db: DbSession,
+    frankfurter: Annotated[FrankfurterClientProtocol, Depends(get_frankfurter)],
+) -> dict:
+    portfolio = get_portfolio_or_404(db, portfolio_id)
+    return switch_portfolio_base_currency(db, portfolio, payload.base_currency, frankfurter)

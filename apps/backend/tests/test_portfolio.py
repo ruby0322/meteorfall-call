@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.config import Settings
 from app.db.init_db import init_database
 from app.main import create_app
-from app.services.portfolio import compute_portfolio_value_usd
+from app.services.portfolio import compute_portfolio_value_in_base
 
 
 def make_settings(database_url: str = "sqlite+pysqlite:///:memory:") -> Settings:
@@ -60,11 +60,11 @@ def make_test_app(settings: Settings | None = None):
     return app, mock_client
 
 
-def test_compute_portfolio_value_usd_reflects_rate_change() -> None:
+def test_compute_portfolio_value_in_base_reflects_rate_change() -> None:
     holdings = [{"currency_code": "EUR", "quantity": 9010.0}]
 
-    prior_value = compute_portfolio_value_usd(holdings, {"EUR": 0.901})
-    current_value = compute_portfolio_value_usd(holdings, {"EUR": 0.880})
+    prior_value = compute_portfolio_value_in_base(holdings, {"EUR": 0.901}, "USD")
+    current_value = compute_portfolio_value_in_base(holdings, {"EUR": 0.880}, "USD")
 
     assert prior_value == 10000.0
     assert current_value > prior_value
@@ -80,6 +80,7 @@ def test_create_portfolio_starts_with_ten_thousand_usd() -> None:
     assert response.status_code == 201
     body = response.json()
     assert body["initial_cash_usd"] == 10000.0
+    assert body["base_currency"] == "USD"
     assert body["total_value_usd"] == 10000.0
     assert body["daily_pl_usd"] == 0.0
     assert body["cumulative_pl_usd"] == 0.0
@@ -330,3 +331,50 @@ def test_snapshot_endpoint_returns_export_payload() -> None:
     assert body["as_of"] == current_day
     assert "simulation" in body["disclaimer"].lower()
     assert len(body["holdings"]) == 1
+
+
+def test_create_portfolio_with_non_usd_base() -> None:
+    app, mock_client = make_test_app()
+    mock_client.fetch_latest.return_value = {
+        "amount": 1.0,
+        "base": "EUR",
+        "date": "2024-08-23",
+        "rates": {"USD": 1.1},
+    }
+    client = TestClient(app)
+
+    response = client.post("/v1/portfolio", json={"base_currency": "EUR"})
+    assert response.status_code == 201
+    body = response.json()
+    assert body["base_currency"] == "EUR"
+    assert body["holdings"][0]["currency_code"] == "EUR"
+
+
+def test_switch_base_currency_rebases_portfolio() -> None:
+    app, mock_client = make_test_app()
+    def latest_side_effect(base: str, symbols: list[str]) -> dict:
+        if base == "EUR":
+            return {"amount": 1.0, "base": "EUR", "date": "2024-08-23", "rates": {"USD": 1.11}}
+        _ = symbols
+        return {"amount": 1.0, "base": "USD", "date": "2024-08-23", "rates": {"EUR": 0.9}}
+
+    mock_client.fetch_latest.side_effect = latest_side_effect
+    mock_client.fetch_history.return_value = {
+        "amount": 1.0,
+        "base": "EUR",
+        "rates": {"2024-08-22": {"USD": 1.10}, "2024-08-23": {"USD": 1.11}},
+    }
+    client = TestClient(app)
+    created = client.post("/v1/portfolio").json()
+
+    response = client.patch(
+        f"/v1/portfolio/{created['id']}/base-currency",
+        json={"base_currency": "EUR"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["base_currency"] == "EUR"
+
+    history = client.get(f"/v1/portfolio/{created['id']}/history", params={"days": 30})
+    assert history.status_code == 200
+    assert history.json()["base_currency"] == "EUR"

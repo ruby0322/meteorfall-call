@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { TwdUnsupportedCard } from "@/components/TwdUnsupportedCard";
 import {
-  TRACKED_SYMBOLS,
   computeDayChange,
   fetchHistoryRates,
   fetchLatestRates,
@@ -12,15 +11,18 @@ import {
   historyWindow,
   type LatestRatesResponse,
 } from "@/lib/api/rates";
+import { BASE_CURRENCY_OPTIONS } from "@/lib/api/portfolio";
+import { useBaseCurrency } from "@/lib/base-currency";
 import { ApiError } from "@/lib/api/client";
 
 type RateCardProps = {
+  baseCurrency: string;
   code: string;
   rate: number;
   dayChange: number | null;
 };
 
-function RateCard({ code, rate, dayChange }: RateCardProps) {
+function RateCard({ baseCurrency, code, rate, dayChange }: RateCardProps) {
   const changeLabel =
     dayChange === null
       ? "—"
@@ -28,7 +30,9 @@ function RateCard({ code, rate, dayChange }: RateCardProps) {
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-      <p className="text-xs uppercase tracking-wider text-zinc-500">USD/{code}</p>
+      <p className="text-xs uppercase tracking-wider text-zinc-500">
+        {baseCurrency}/{code}
+      </p>
       <p className="mt-2 font-mono text-2xl text-emerald-400">{formatRate(code, rate)}</p>
       <p
         className={`mt-1 text-xs ${
@@ -46,10 +50,16 @@ function RateCard({ code, rate, dayChange }: RateCardProps) {
 }
 
 export function RateBoard() {
+  const { baseCurrency } = useBaseCurrency();
   const [latest, setLatest] = useState<LatestRatesResponse | null>(null);
   const [dayChanges, setDayChanges] = useState<Record<string, number | null>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const symbols = useMemo(
+    () => BASE_CURRENCY_OPTIONS.filter((code) => code !== baseCurrency),
+    [baseCurrency],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -60,15 +70,15 @@ export function RateBoard() {
       try {
         const { start, end } = historyWindow(14);
         const [latestRates, history] = await Promise.all([
-          fetchLatestRates(),
-          fetchHistoryRates(start, end),
+          fetchLatestRates(baseCurrency, symbols.join(",")),
+          fetchHistoryRates(start, end, baseCurrency, symbols.join(",")),
         ]);
         if (cancelled) {
           return;
         }
         setLatest(latestRates);
         const changes = Object.fromEntries(
-          TRACKED_SYMBOLS.map((code) => [code, computeDayChange(history, code)]),
+          symbols.map((code) => [code, computeDayChange(history, code)]),
         );
         setDayChanges(changes);
       } catch (err) {
@@ -91,14 +101,14 @@ export function RateBoard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [baseCurrency, symbols]);
 
   return (
     <div className="space-y-8">
       <section className="space-y-2">
         <h2 className="text-2xl font-semibold text-zinc-50">Daily Rate Board</h2>
         <p className="text-sm text-zinc-400">
-          USD base · Frankfurter ECB reference rates · updated once per business day (~16:00 CET)
+          {baseCurrency} base · Frankfurter ECB reference rates · updated once per business day (~16:00 CET)
         </p>
       </section>
 
@@ -110,7 +120,7 @@ export function RateBoard() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {loading
-          ? TRACKED_SYMBOLS.map((code) => (
+          ? symbols.map((code) => (
               <div
                 key={code}
                 className="animate-pulse rounded-lg border border-zinc-800 bg-zinc-900/60 p-4"
@@ -119,9 +129,10 @@ export function RateBoard() {
                 <div className="mt-4 h-8 w-24 rounded bg-zinc-800" />
               </div>
             ))
-          : TRACKED_SYMBOLS.map((code) => (
+          : symbols.map((code) => (
               <RateCard
                 key={code}
+                baseCurrency={baseCurrency}
                 code={code}
                 rate={latest?.rates[code] ?? 0}
                 dayChange={dayChanges[code] ?? null}

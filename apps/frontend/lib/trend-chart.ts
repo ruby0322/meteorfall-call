@@ -19,13 +19,16 @@ const SERIES_COLORS: Record<string, string> = {
   SGD: "#a78bfa",
 };
 
-export function pivotHistoryToSeries(history: HistoryRatesResponse): ChartSeries[] {
+export function pivotHistoryToSeries(
+  history: HistoryRatesResponse,
+  symbols: readonly string[] = TRACKED_SYMBOLS,
+): ChartSeries[] {
   const dates = Object.keys(history.rates).sort();
   if (dates.length === 0) {
     return [];
   }
 
-  return TRACKED_SYMBOLS.map((code) => {
+  return symbols.map((code) => {
     const rawPoints = dates
       .map((date) => {
         const rate = history.rates[date]?.[code];
@@ -55,9 +58,14 @@ export function pivotHistoryToSeries(history: HistoryRatesResponse): ChartSeries
 }
 
 export async function loadTrendSeries(days = 30): Promise<ChartSeries[]> {
+  return loadTrendSeriesForBase("USD", days);
+}
+
+export async function loadTrendSeriesForBase(base: string, days = 30): Promise<ChartSeries[]> {
   const { start, end } = historyWindow(days);
-  const history = await fetchHistoryRates(start, end);
-  return pivotHistoryToSeries(history);
+  const symbols = TRACKED_SYMBOLS.filter((code) => code !== base);
+  const history = await fetchHistoryRates(start, end, base, symbols.join(","));
+  return pivotHistoryToSeries(history, symbols);
 }
 
 export function buildSvgPath(

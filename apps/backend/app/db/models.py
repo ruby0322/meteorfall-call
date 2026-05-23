@@ -13,6 +13,7 @@ class Portfolio(Base):
     __tablename__ = "portfolios"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    base_currency: Mapped[str] = mapped_column(String(3), default="USD")
     initial_cash_usd: Mapped[float] = mapped_column(Float, default=10000.0)
     prior_value_usd: Mapped[float] = mapped_column(Float, default=10000.0)
     rates_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
@@ -47,6 +48,7 @@ class RebalanceRecord(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     portfolio_id: Mapped[str] = mapped_column(ForeignKey("portfolios.id"), index=True)
+    base_currency: Mapped[str] = mapped_column(String(3), default="USD")
     effective_rates_date: Mapped[str] = mapped_column(String(10))
     total_value_usd: Mapped[float] = mapped_column(Float)
     holdings_json: Mapped[str] = mapped_column(Text)

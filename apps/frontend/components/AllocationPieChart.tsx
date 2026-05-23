@@ -1,6 +1,6 @@
 "use client";
 
-import { formatUsd } from "@/lib/api/portfolio";
+import { formatMoney } from "@/lib/api/portfolio";
 
 type AllocationSlice = {
   currency_code: string;
@@ -51,10 +51,12 @@ export function AllocationPieChart({
   title,
   totalUsd,
   slices,
+  baseCurrency = "USD",
 }: {
   title: string;
   totalUsd: number;
   slices: AllocationSlice[];
+  baseCurrency?: string;
 }) {
   const positiveSlices = slices.filter((slice) => slice.weight_percent > 0);
   let cursor = 0;
@@ -71,7 +73,8 @@ export function AllocationPieChart({
             return (
               <path key={slice.currency_code} d={path} fill={COLORS[slice.currency_code] ?? "#94a3b8"}>
                 <title>
-                  {slice.currency_code} · {slice.weight_percent.toFixed(1)}% · {formatUsd(slice.usd_value)}
+                  {slice.currency_code} · {slice.weight_percent.toFixed(1)}% ·{" "}
+                  {formatMoney(slice.usd_value, baseCurrency)}
                 </title>
               </path>
             );
@@ -81,7 +84,7 @@ export function AllocationPieChart({
             Total
           </text>
           <text x="110" y="120" textAnchor="middle" className="fill-emerald-400 text-[12px] font-semibold">
-            {formatUsd(totalUsd)}
+            {formatMoney(totalUsd, baseCurrency)}
           </text>
         </svg>
 
@@ -90,7 +93,7 @@ export function AllocationPieChart({
             <div key={slice.currency_code} className="flex items-center justify-between text-zinc-300">
               <span className="font-mono">{slice.currency_code}</span>
               <span>
-                {slice.weight_percent.toFixed(1)}% · {formatUsd(slice.usd_value)}
+                {slice.weight_percent.toFixed(1)}% · {formatMoney(slice.usd_value, baseCurrency)}
               </span>
             </div>
           ))}

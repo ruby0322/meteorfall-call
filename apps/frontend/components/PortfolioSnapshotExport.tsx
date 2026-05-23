@@ -2,21 +2,22 @@
 
 import { useMemo, useState } from "react";
 
-import { formatUsd, type PortfolioSnapshotResponse } from "@/lib/api/portfolio";
+import { formatMoney, type PortfolioSnapshotResponse } from "@/lib/api/portfolio";
 
-function snapshotToMarkdown(snapshot: PortfolioSnapshotResponse): string {
+function snapshotToMarkdown(snapshot: PortfolioSnapshotResponse, baseCurrency: string): string {
   const lines = [
     `# MarketMage Portfolio Snapshot (${snapshot.as_of ?? "N/A"})`,
     "",
-    `- Total value: ${formatUsd(snapshot.total_value_usd)}`,
-    `- Daily P/L: ${formatUsd(snapshot.daily_pl_usd)}`,
-    `- Cumulative P/L: ${formatUsd(snapshot.cumulative_pl_usd)}`,
+    `- Base currency: ${baseCurrency}`,
+    `- Total value: ${formatMoney(snapshot.total_value_usd, baseCurrency)}`,
+    `- Daily P/L: ${formatMoney(snapshot.daily_pl_usd, baseCurrency)}`,
+    `- Cumulative P/L: ${formatMoney(snapshot.cumulative_pl_usd, baseCurrency)}`,
     "",
-    "| Currency | Weight | USD Value | Quantity |",
+    "| Currency | Weight | Base Value | Quantity |",
     "| --- | ---: | ---: | ---: |",
     ...snapshot.holdings.map(
       (holding) =>
-        `| ${holding.currency_code} | ${holding.weight_actual_percent.toFixed(2)}% | ${formatUsd(holding.usd_value)} | ${holding.quantity.toFixed(4)} |`,
+        `| ${holding.currency_code} | ${holding.weight_actual_percent.toFixed(2)}% | ${formatMoney(holding.usd_value, baseCurrency)} | ${holding.quantity.toFixed(4)} |`,
     ),
     "",
     `> ${snapshot.disclaimer}`,
@@ -24,9 +25,18 @@ function snapshotToMarkdown(snapshot: PortfolioSnapshotResponse): string {
   return lines.join("\n");
 }
 
-export function PortfolioSnapshotExport({ snapshot }: { snapshot: PortfolioSnapshotResponse | null }) {
+export function PortfolioSnapshotExport({
+  snapshot,
+  baseCurrency,
+}: {
+  snapshot: PortfolioSnapshotResponse | null;
+  baseCurrency: string;
+}) {
   const [copied, setCopied] = useState<"json" | "markdown" | null>(null);
-  const markdown = useMemo(() => (snapshot ? snapshotToMarkdown(snapshot) : ""), [snapshot]);
+  const markdown = useMemo(
+    () => (snapshot ? snapshotToMarkdown(snapshot, baseCurrency) : ""),
+    [snapshot, baseCurrency],
+  );
 
   async function copyText(content: string, kind: "json" | "markdown") {
     await navigator.clipboard.writeText(content);

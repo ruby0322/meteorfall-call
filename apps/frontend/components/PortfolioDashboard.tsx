@@ -12,14 +12,16 @@ import {
   fetchPortfolio,
   fetchPortfolioHistory,
   fetchPortfolioSnapshot,
-  formatUsd,
+  formatMoney,
   previewPortfolioHoldings,
   getStoredPortfolioId,
   storePortfolioId,
+  switchPortfolioBaseCurrency,
   updatePortfolioHoldings,
   type HoldingDetail,
   type Portfolio,
 } from "@/lib/api/portfolio";
+import { useBaseCurrency } from "@/lib/base-currency";
 import {
   applySliderChange,
   buildTradeDraft,
@@ -55,6 +57,7 @@ function holdingsToPieSlices(holdings: HoldingDetail[]) {
 }
 
 export function PortfolioDashboard() {
+  const { baseCurrency } = useBaseCurrency();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [draft, setDraft] = useState<DraftWeights>(() => emptyDraftWeights());
   const [tradeDraft, setTradeDraft] = useState(buildTradeDraft);
@@ -83,7 +86,10 @@ export function PortfolioDashboard() {
       setError(null);
       try {
         const storedId = getStoredPortfolioId();
-        const data = storedId ? await fetchPortfolio(storedId) : await createPortfolio();
+        let data = storedId ? await fetchPortfolio(storedId) : await createPortfolio(baseCurrency);
+        if (storedId && data.base_currency !== baseCurrency) {
+          data = await switchPortfolioBaseCurrency(storedId, baseCurrency);
+        }
         if (cancelled) {
           return;
         }
@@ -116,7 +122,7 @@ export function PortfolioDashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [baseCurrency]);
 
   async function handleReview() {
     if (!portfolio) {
@@ -190,7 +196,8 @@ export function PortfolioDashboard() {
       <section className="space-y-2">
         <h2 className="text-2xl font-semibold text-zinc-50">Paper Portfolio</h2>
         <p className="text-sm text-zinc-400">
-          Virtual {formatUsd(portfolio.initial_cash_usd)} · manual allocation · simulation only
+          Virtual {formatMoney(portfolio.initial_cash_usd, portfolio.base_currency)} · manual allocation ·
+          simulation only
         </p>
       </section>
 
@@ -204,7 +211,7 @@ export function PortfolioDashboard() {
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
           <p className="text-xs uppercase tracking-wider text-zinc-500">Total value</p>
           <p className="mt-2 font-mono text-3xl text-emerald-400">
-            {formatUsd(portfolio.total_value_usd)}
+            {formatMoney(portfolio.total_value_usd, portfolio.base_currency)}
           </p>
           <p className="mt-1 text-xs text-zinc-500">
             Rates date: {portfolio.rates_date ?? "USD cash only"}
@@ -218,13 +225,13 @@ export function PortfolioDashboard() {
             }`}
           >
             {portfolio.daily_pl_usd >= 0 ? "+" : ""}
-            {formatUsd(portfolio.daily_pl_usd)}
+            {formatMoney(portfolio.daily_pl_usd, portfolio.base_currency)}
           </p>
           <p className="mt-1 text-xs text-zinc-500">Prior date: {portfolio.prior_rates_date ?? "N/A"}</p>
           <p className="mt-2 text-xs uppercase tracking-wider text-zinc-500">Cumulative P/L</p>
           <p className={portfolio.cumulative_pl_usd >= 0 ? "text-emerald-400" : "text-rose-400"}>
             {portfolio.cumulative_pl_usd >= 0 ? "+" : ""}
-            {formatUsd(portfolio.cumulative_pl_usd)}
+            {formatMoney(portfolio.cumulative_pl_usd, portfolio.base_currency)}
           </p>
           <button
             type="button"
@@ -239,8 +246,9 @@ export function PortfolioDashboard() {
       {showCalc ? (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 text-sm text-zinc-300">
           <p>
-            Mark-to-market value = USD cash + Σ(foreign quantity ÷ latest rate). Daily P/L = mark-to-market
-            at latest rates − mark-to-market at prior business-day rates (same quantities).
+            Mark-to-market value = {portfolio.base_currency} cash + Σ(foreign quantity ÷ latest rate). Daily
+            P/L = mark-to-market at latest rates − mark-to-market at prior business-day rates (same
+            quantities).
           </p>
           <p className="mt-2 text-zinc-500">
             No leverage, no auto-trading, no predictions — just math on daily reference rates.
@@ -252,6 +260,7 @@ export function PortfolioDashboard() {
         title="Current allocation"
         totalUsd={portfolio.total_value_usd}
         slices={currentPieSlices}
+        baseCurrency={portfolio.base_currency}
       />
 
       <section className="space-y-4 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
@@ -264,7 +273,7 @@ export function PortfolioDashboard() {
                 <th className="py-2 font-medium">Target %</th>
                 <th className="py-2 font-medium">Actual %</th>
                 <th className="py-2 font-medium">Quantity</th>
-                <th className="py-2 font-medium">USD value</th>
+                <th className="py-2 font-medium">{portfolio.base_currency} value</th>
               </tr>
             </thead>
             <tbody className="text-zinc-200">
@@ -274,7 +283,7 @@ export function PortfolioDashboard() {
                   <td className="py-2">{holding.weight_percent.toFixed(2)}%</td>
                   <td className="py-2">{holding.weight_actual_percent.toFixed(2)}%</td>
                   <td className="py-2 font-mono">{holding.quantity.toFixed(4)}</td>
-                  <td className="py-2">{formatUsd(holding.usd_value)}</td>
+                  <td className="py-2">{formatMoney(holding.usd_value, portfolio.base_currency)}</td>
                 </tr>
               ))}
             </tbody>
@@ -382,6 +391,7 @@ export function PortfolioDashboard() {
           title="Preview allocation"
           totalUsd={portfolio.total_value_usd}
           slices={previewPieSlices}
+          baseCurrency={portfolio.base_currency}
         />
 
         <div className="flex flex-wrap items-center gap-3">
@@ -419,6 +429,7 @@ export function PortfolioDashboard() {
               title="Current"
               totalUsd={portfolio.total_value_usd}
               slices={currentPieSlices}
+              baseCurrency={portfolio.base_currency}
             />
             <AllocationPieChart
               title="After rebalance"
@@ -428,6 +439,7 @@ export function PortfolioDashboard() {
                 weight_percent: holding.weight_actual_percent,
                 usd_value: holding.usd_value,
               }))}
+              baseCurrency={portfolio.base_currency}
             />
           </div>
           <div className="space-y-1 text-sm">
@@ -436,7 +448,7 @@ export function PortfolioDashboard() {
                 <span className="font-mono">{delta.currency_code}</span>
                 <span>
                   {delta.usd_delta >= 0 ? "+" : ""}
-                  {formatUsd(delta.usd_delta)}
+                  {formatMoney(delta.usd_delta, portfolio.base_currency)}
                 </span>
               </div>
             ))}
@@ -463,12 +475,16 @@ export function PortfolioDashboard() {
       ) : null}
 
       {history ? (
-        <PortfolioHistoryChart points={history.points} markers={history.rebalance_markers} />
+        <PortfolioHistoryChart
+          points={history.points}
+          markers={history.rebalance_markers}
+          baseCurrency={portfolio.base_currency}
+        />
       ) : (
         <div className="h-48 animate-pulse rounded-lg bg-zinc-900/40" />
       )}
 
-      <PortfolioSnapshotExport snapshot={snapshot} />
+      <PortfolioSnapshotExport snapshot={snapshot} baseCurrency={portfolio.base_currency} />
     </div>
   );
 }

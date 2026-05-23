@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 
 import { ApiError } from "@/lib/api/client";
+import { useBaseCurrency } from "@/lib/base-currency";
 import {
   buildSvgPath,
   computeYBounds,
-  loadTrendSeries,
+  loadTrendSeriesForBase,
   type ChartSeries,
 } from "@/lib/trend-chart";
 
@@ -15,6 +16,7 @@ const HEIGHT = 280;
 const PADDING = 28;
 
 export function TrendChart() {
+  const { baseCurrency } = useBaseCurrency();
   const [series, setSeries] = useState<ChartSeries[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,7 +28,7 @@ export function TrendChart() {
       setLoading(true);
       setError(null);
       try {
-        const data = await loadTrendSeries(30);
+        const data = await loadTrendSeriesForBase(baseCurrency, 30);
         if (!cancelled) {
           setSeries(data);
         }
@@ -50,7 +52,7 @@ export function TrendChart() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [baseCurrency]);
 
   const bounds = computeYBounds(series);
 
@@ -59,7 +61,7 @@ export function TrendChart() {
       <div>
         <h3 className="text-lg font-semibold text-zinc-50">30-day trend (% change)</h3>
         <p className="text-sm text-zinc-400">
-          Normalized from period start — historical context, not a forecast.
+          {baseCurrency} base, normalized from period start — historical context, not a forecast.
         </p>
       </div>
 

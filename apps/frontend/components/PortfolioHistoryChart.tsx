@@ -1,6 +1,6 @@
 "use client";
 
-import { formatUsd, type PortfolioHistoryPoint } from "@/lib/api/portfolio";
+import { formatMoney, type PortfolioHistoryPoint } from "@/lib/api/portfolio";
 
 const WIDTH = 860;
 const HEIGHT = 280;
@@ -28,9 +28,11 @@ function buildPath(points: PortfolioHistoryPoint[]): string {
 export function PortfolioHistoryChart({
   points,
   markers,
+  baseCurrency,
 }: {
   points: PortfolioHistoryPoint[];
   markers: string[];
+  baseCurrency: string;
 }) {
   if (points.length === 0) {
     return (
@@ -51,7 +53,9 @@ export function PortfolioHistoryChart({
     <section className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-lg font-semibold text-zinc-50">30-day portfolio value</h3>
-        <p className="font-mono text-sm text-emerald-400">{formatUsd(last.total_value_usd)}</p>
+        <p className="font-mono text-sm text-emerald-400">
+          {formatMoney(last.total_value_usd, baseCurrency)}
+        </p>
       </div>
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-72 w-full">
         <rect x={0} y={0} width={WIDTH} height={HEIGHT} fill="#0a0a0a" />
@@ -64,18 +68,18 @@ export function PortfolioHistoryChart({
         })}
         <path d={buildPath(points)} fill="none" stroke="#34d399" strokeWidth={2.5} />
         <text x={PADDING} y={PADDING - 4} className="fill-zinc-500 text-[10px]">
-          {formatUsd(max)}
+          {formatMoney(max, baseCurrency)}
         </text>
         <text x={PADDING} y={HEIGHT - 6} className="fill-zinc-500 text-[10px]">
-          {formatUsd(min)}
+          {formatMoney(min, baseCurrency)}
         </text>
       </svg>
       <p className="text-xs text-zinc-500">
         Vertical lines mark rebalance dates. Values are mark-to-market on Frankfurter business-day rates.
       </p>
       <div className="flex flex-wrap gap-4 text-xs text-zinc-400">
-        <span>Latest daily P/L: {formatUsd(last.daily_pl_usd)}</span>
-        <span>Cumulative P/L: {formatUsd(last.cumulative_pl_usd)}</span>
+        <span>Latest daily P/L: {formatMoney(last.daily_pl_usd, baseCurrency)}</span>
+        <span>Cumulative P/L: {formatMoney(last.cumulative_pl_usd, baseCurrency)}</span>
       </div>
     </section>
   );
