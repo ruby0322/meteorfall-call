@@ -102,3 +102,37 @@ See [`examples/`](./examples) for working `CLAUDE.md`, `AGENTS.md`, and skill fi
 Read [`GRADING.md`](./GRADING.md) before you start. Then check out [`examples/`](./examples).
 
 Good luck. Riley's about to send you a brief.
+
+---
+
+## MarketMage submission (Topic 1)
+
+This fork implements **FX Literacy Lab** — a defensible slice of Topic 1 with full triage documented in [`PLAN.md`](./PLAN.md).
+
+### One-command run (Docker — recommended for graders)
+
+```bash
+cp .env.example .env
+npm run docker:up
+```
+
+Open [http://localhost:3000](http://localhost:3000). Backend health: [http://localhost:8000/healthz](http://localhost:8000/healthz).
+
+Stop: `npm run docker:down`
+
+### Local development (without Docker)
+
+```bash
+cp .env.example .env
+npm install
+npm --prefix apps/frontend install
+npm run dev
+```
+
+Runs Next.js on `:3000` and FastAPI on `:8000` via the project venv.
+
+### Tests
+
+```bash
+npm test
+```

@@ -85,6 +85,7 @@ Local development (without Docker):
 ```
 cp .env.example .env
 npm install
+npm --prefix apps/frontend install
 npm run dev
 ```
 
