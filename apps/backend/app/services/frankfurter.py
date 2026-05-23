@@ -23,7 +23,7 @@ class FrankfurterClientProtocol(Protocol):
 class FrankfurterClient:
     def __init__(self, base_url: str, http_client: httpx.Client | None = None) -> None:
         self.base_url = base_url.rstrip("/")
-        self._client = http_client or httpx.Client(timeout=10.0)
+        self._client = http_client or httpx.Client(timeout=10.0, follow_redirects=True)
         self._owns_client = http_client is None
 
     def fetch_latest(self, base: str, symbols: list[str]) -> dict:
