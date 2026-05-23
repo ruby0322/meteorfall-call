@@ -3,11 +3,17 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, status
 
 from app.api.deps.db import DbSession
-from app.schemas.portfolio import PortfolioResponse, PreviewHoldingsResponse, UpdateHoldingsRequest
+from app.schemas.portfolio import (
+    PortfolioHistoryResponse,
+    PortfolioResponse,
+    PreviewHoldingsResponse,
+    UpdateHoldingsRequest,
+)
 from app.services.frankfurter import FrankfurterClientProtocol
 from app.services.portfolio import (
     create_default_portfolio,
     get_portfolio_or_404,
+    portfolio_history_response,
     portfolio_to_response,
     preview_portfolio_holdings,
     update_portfolio_holdings,
@@ -61,3 +67,14 @@ def preview_holdings(
     portfolio = get_portfolio_or_404(db, portfolio_id)
     weights = [(item.currency_code, item.weight_percent) for item in payload.holdings]
     return preview_portfolio_holdings(portfolio, weights, frankfurter)
+
+
+@router.get("/portfolio/{portfolio_id}/history", response_model=PortfolioHistoryResponse)
+def portfolio_history(
+    portfolio_id: str,
+    db: DbSession,
+    frankfurter: Annotated[FrankfurterClientProtocol, Depends(get_frankfurter)],
+    days: int = 30,
+) -> dict:
+    portfolio = get_portfolio_or_404(db, portfolio_id)
+    return portfolio_history_response(portfolio, days, frankfurter)

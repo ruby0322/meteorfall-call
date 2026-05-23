@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import date, timedelta
 from typing import TypedDict
@@ -5,7 +6,7 @@ from typing import TypedDict
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.db.models import Holding, Portfolio
+from app.db.models import Holding, Portfolio, RebalanceRecord
 from app.services.frankfurter import FrankfurterClientProtocol
 
 
@@ -20,6 +21,13 @@ class HoldingDetail(TypedDict):
     weight_actual_percent: float
     quantity: float
     usd_value: float
+
+
+class HistoryPoint(TypedDict):
+    date: str
+    total_value_usd: float
+    daily_pl_usd: float
+    cumulative_pl_usd: float
 
 
 def compute_portfolio_value_usd(
@@ -78,6 +86,44 @@ def _to_quantities(holdings: list[Holding]) -> list[HoldingQuantity]:
         {"currency_code": holding.currency_code, "quantity": holding.quantity}
         for holding in holdings
     ]
+
+
+def _rows_from_holdings(holdings: list[Holding]) -> list[tuple[str, float, float]]:
+    return [(holding.currency_code, holding.weight_percent, holding.quantity) for holding in holdings]
+
+
+def _snapshot_rows(rows: list[tuple[str, float, float]]) -> str:
+    return json.dumps(
+        [
+            {"currency_code": code, "weight_percent": weight, "quantity": quantity}
+            for code, weight, quantity in rows
+        ]
+    )
+
+
+def _parse_snapshot_rows(serialized_rows: str) -> list[tuple[str, float, float]]:
+    parsed = json.loads(serialized_rows)
+    return [
+        (str(item["currency_code"]), float(item["weight_percent"]), float(item["quantity"]))
+        for item in parsed
+    ]
+
+
+def _ensure_rebalance_record(
+    db: Session,
+    portfolio: Portfolio,
+    rates_date: str,
+    total_value_usd: float,
+    rows: list[tuple[str, float, float]],
+) -> None:
+    db.add(
+        RebalanceRecord(
+            portfolio_id=portfolio.id,
+            effective_rates_date=rates_date,
+            total_value_usd=round(total_value_usd, 2),
+            holdings_json=_snapshot_rows(rows),
+        )
+    )
 
 
 def _resolve_usd_value(currency_code: str, quantity: float, rates: dict[str, float]) -> float:
@@ -148,6 +194,13 @@ def create_default_portfolio(db: Session) -> Portfolio:
             weight_percent=100.0,
         )
     ]
+    _ensure_rebalance_record(
+        db=db,
+        portfolio=portfolio,
+        rates_date=date.today().isoformat(),
+        total_value_usd=portfolio.initial_cash_usd,
+        rows=[("USD", 100.0, portfolio.initial_cash_usd)],
+    )
     db.add(portfolio)
     db.commit()
     db.refresh(portfolio)
@@ -210,9 +263,7 @@ def preview_portfolio_holdings(
     weights: list[tuple[str, float]],
     frankfurter: FrankfurterClientProtocol,
 ) -> dict:
-    existing_rows = [
-        (holding.currency_code, holding.weight_percent, holding.quantity) for holding in portfolio.holdings
-    ]
+    existing_rows = _rows_from_holdings(portfolio.holdings)
     existing_quantities = _to_quantities(portfolio.holdings)
     existing_currency_codes = [holding.currency_code for holding in portfolio.holdings]
     existing_rates_date, existing_rates = fetch_latest_rates(frankfurter, existing_currency_codes)
@@ -282,7 +333,98 @@ def update_portfolio_holdings(
     current_value = compute_portfolio_value_usd(quantities, rates)
     portfolio.prior_value_usd = current_value
     portfolio.rates_date = rates_date or portfolio.rates_date
+    _ensure_rebalance_record(
+        db=db,
+        portfolio=portfolio,
+        rates_date=rates_date or date.today().isoformat(),
+        total_value_usd=current_value,
+        rows=rows,
+    )
     db.add(portfolio)
     db.commit()
     db.refresh(portfolio)
     return portfolio_to_response(portfolio, frankfurter)
+
+
+def portfolio_history_response(
+    portfolio: Portfolio,
+    days: int,
+    frankfurter: FrankfurterClientProtocol,
+) -> dict:
+    if days < 2:
+        days = 2
+
+    records = list(portfolio.rebalance_records)
+    if not records:
+        rows = _rows_from_holdings(portfolio.holdings)
+        records = [
+            RebalanceRecord(
+                portfolio_id=portfolio.id,
+                effective_rates_date=(portfolio.rates_date or date.today().isoformat()),
+                total_value_usd=portfolio.initial_cash_usd,
+                holdings_json=_snapshot_rows(rows),
+            )
+        ]
+
+    records = sorted(records, key=lambda item: (item.effective_rates_date, item.created_at))
+    latest_history_date = date.today().isoformat()
+    if portfolio.rates_date:
+        latest_history_date = portfolio.rates_date
+    else:
+        current_rates_date, _ = fetch_latest_rates(
+            frankfurter, [holding.currency_code for holding in portfolio.holdings]
+        )
+        latest_history_date = current_rates_date or latest_history_date
+
+    end_day = date.fromisoformat(latest_history_date)
+    start_day = end_day - timedelta(days=days + 10)
+    points_by_date: dict[str, float] = {}
+    markers: list[str] = []
+
+    for index, record in enumerate(records):
+        segment_start = max(date.fromisoformat(record.effective_rates_date), start_day)
+        next_effective = (
+            date.fromisoformat(records[index + 1].effective_rates_date)
+            if index + 1 < len(records)
+            else end_day + timedelta(days=1)
+        )
+        segment_end = min(end_day, next_effective - timedelta(days=1))
+        if segment_end < segment_start:
+            continue
+
+        rows = _parse_snapshot_rows(record.holdings_json)
+        quantities = [{"currency_code": code, "quantity": qty} for code, _, qty in rows]
+        non_usd = sorted({code for code, _, _ in rows if code != "USD"})
+
+        if segment_start <= end_day and record.effective_rates_date >= start_day.isoformat():
+            markers.append(record.effective_rates_date)
+
+        if not non_usd:
+            points_by_date[segment_start.isoformat()] = round(sum(qty for code, _, qty in rows if code == "USD"), 2)
+            continue
+
+        payload = frankfurter.fetch_history(
+            "USD", non_usd, segment_start.isoformat(), segment_end.isoformat()
+        )
+        rates_by_date = payload.get("rates", {})
+        for day in sorted(rates_by_date.keys()):
+            rates = rates_by_date.get(day, {})
+            points_by_date[day] = compute_portfolio_value_usd(quantities, rates)
+
+    sorted_dates = sorted(day for day in points_by_date.keys() if day >= start_day.isoformat())
+    points: list[HistoryPoint] = []
+    previous_value: float | None = None
+    for day in sorted_dates:
+        value = points_by_date[day]
+        daily_pl = 0.0 if previous_value is None else round(value - previous_value, 2)
+        points.append(
+            {
+                "date": day,
+                "total_value_usd": value,
+                "daily_pl_usd": daily_pl,
+                "cumulative_pl_usd": round(value - portfolio.initial_cash_usd, 2),
+            }
+        )
+        previous_value = value
+
+    return {"points": points, "rebalance_markers": sorted(set(markers))}

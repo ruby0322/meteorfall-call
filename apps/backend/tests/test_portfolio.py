@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock
+from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -219,3 +220,81 @@ def test_preview_does_not_persist() -> None:
     assert current.status_code == 200
     assert current.json()["holdings"][0]["currency_code"] == "USD"
     assert current.json()["holdings"][0]["weight_percent"] == 100.0
+
+
+def test_history_segments_across_rebalance() -> None:
+    app, mock_client = make_test_app()
+    current_day = date.today().isoformat()
+    prior_day = (date.today() - timedelta(days=1)).isoformat()
+
+    mock_client.fetch_latest.return_value = {
+        "amount": 1.0,
+        "base": "USD",
+        "date": current_day,
+        "rates": {"EUR": 0.90},
+    }
+
+    def history_side_effect(base: str, symbols: list[str], start: str, end: str) -> dict:
+        _ = (base, start, end)
+        if symbols == ["EUR"]:
+            return {
+                "amount": 1.0,
+                "base": "USD",
+                "rates": {
+                    prior_day: {"EUR": 0.91},
+                    current_day: {"EUR": 0.90},
+                },
+            }
+        return {"amount": 1.0, "base": "USD", "rates": {}}
+
+    mock_client.fetch_history.side_effect = history_side_effect
+    client = TestClient(app)
+    created = client.post("/v1/portfolio").json()
+    portfolio_id = created["id"]
+    response = client.put(
+        f"/v1/portfolio/{portfolio_id}/holdings",
+        json={"holdings": [{"currency_code": "EUR", "weight_percent": 100.0}]},
+    )
+    assert response.status_code == 200
+
+    history = client.get(f"/v1/portfolio/{portfolio_id}/history", params={"days": 30})
+    assert history.status_code == 200
+    body = history.json()
+    assert current_day in body["rebalance_markers"]
+    assert len(body["points"]) >= 1
+    assert body["points"][-1]["date"] == current_day
+
+
+def test_history_cumulative_pl_matches_total_minus_initial() -> None:
+    app, mock_client = make_test_app()
+    current_day = date.today().isoformat()
+    prior_day = (date.today() - timedelta(days=1)).isoformat()
+    mock_client.fetch_latest.return_value = {
+        "amount": 1.0,
+        "base": "USD",
+        "date": current_day,
+        "rates": {"EUR": 0.90},
+    }
+    mock_client.fetch_history.return_value = {
+        "amount": 1.0,
+        "base": "USD",
+        "rates": {
+            prior_day: {"EUR": 0.92},
+            current_day: {"EUR": 0.90},
+        },
+    }
+
+    client = TestClient(app)
+    created = client.post("/v1/portfolio").json()
+    portfolio_id = created["id"]
+    client.put(
+        f"/v1/portfolio/{portfolio_id}/holdings",
+        json={"holdings": [{"currency_code": "EUR", "weight_percent": 100.0}]},
+    )
+
+    history = client.get(f"/v1/portfolio/{portfolio_id}/history", params={"days": 30})
+    assert history.status_code == 200
+    points = history.json()["points"]
+    assert len(points) >= 2
+    last = points[-1]
+    assert last["cumulative_pl_usd"] == round(last["total_value_usd"] - 10000.0, 2)

@@ -40,6 +40,18 @@ export type PreviewHoldingsResponse = {
   deltas: HoldingDelta[];
 };
 
+export type PortfolioHistoryPoint = {
+  date: string;
+  total_value_usd: number;
+  daily_pl_usd: number;
+  cumulative_pl_usd: number;
+};
+
+export type PortfolioHistoryResponse = {
+  points: PortfolioHistoryPoint[];
+  rebalance_markers: string[];
+};
+
 const PORTFOLIO_STORAGE_KEY = "marketmage-portfolio-id";
 
 export function getStoredPortfolioId(): string | null {
@@ -81,6 +93,13 @@ export async function previewPortfolioHoldings(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ holdings }),
   });
+}
+
+export async function fetchPortfolioHistory(
+  portfolioId: string,
+  days = 30,
+): Promise<PortfolioHistoryResponse> {
+  return apiFetch<PortfolioHistoryResponse>(`/v1/portfolio/${portfolioId}/history?days=${days}`);
 }
 
 export function formatUsd(value: number): string {

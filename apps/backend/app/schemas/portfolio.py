@@ -56,3 +56,15 @@ class PreviewHoldingsResponse(BaseModel):
     total_value_usd: float
     projected_holdings: list[HoldingDetailResponse]
     deltas: list[HoldingDeltaResponse]
+
+
+class PortfolioHistoryPointResponse(BaseModel):
+    date: str
+    total_value_usd: float
+    daily_pl_usd: float
+    cumulative_pl_usd: float
+
+
+class PortfolioHistoryResponse(BaseModel):
+    points: list[PortfolioHistoryPointResponse]
+    rebalance_markers: list[str]
