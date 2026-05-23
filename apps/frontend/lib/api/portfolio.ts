@@ -65,6 +65,27 @@ export type PortfolioSnapshotResponse = {
   disclaimer: string;
 };
 
+export type PortfolioTransactionHolding = {
+  currency_code: string;
+  weight_percent: number;
+  quantity: number;
+};
+
+export type PortfolioTransaction = {
+  id: number;
+  event_type: "initial" | "rebalance" | "base_currency_switch";
+  base_currency: string;
+  effective_rates_date: string;
+  total_value_usd: number;
+  holdings: PortfolioTransactionHolding[];
+  created_at: string;
+};
+
+export type PortfolioTransactionsResponse = {
+  base_currency: string;
+  transactions: PortfolioTransaction[];
+};
+
 const PORTFOLIO_STORAGE_KEY = "marketmage-portfolio-id";
 
 export function getStoredPortfolioId(): string | null {
@@ -121,6 +142,12 @@ export async function fetchPortfolioHistory(
 
 export async function fetchPortfolioSnapshot(portfolioId: string): Promise<PortfolioSnapshotResponse> {
   return apiFetch<PortfolioSnapshotResponse>(`/v1/portfolio/${portfolioId}/snapshot`);
+}
+
+export async function fetchPortfolioTransactions(
+  portfolioId: string,
+): Promise<PortfolioTransactionsResponse> {
+  return apiFetch<PortfolioTransactionsResponse>(`/v1/portfolio/${portfolioId}/transactions`);
 }
 
 export async function switchPortfolioBaseCurrency(

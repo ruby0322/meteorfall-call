@@ -99,3 +99,24 @@ class PortfolioSnapshotResponse(BaseModel):
     cumulative_pl_usd: float
     holdings: list[HoldingDetailResponse]
     disclaimer: str
+
+
+class PortfolioTransactionHoldingResponse(BaseModel):
+    currency_code: str
+    weight_percent: float
+    quantity: float
+
+
+class PortfolioTransactionResponse(BaseModel):
+    id: int
+    event_type: str
+    base_currency: str
+    effective_rates_date: str
+    total_value_usd: float
+    holdings: list[PortfolioTransactionHoldingResponse]
+    created_at: str
+
+
+class PortfolioTransactionsResponse(BaseModel):
+    base_currency: str
+    transactions: list[PortfolioTransactionResponse]

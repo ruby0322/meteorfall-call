@@ -6,12 +6,14 @@ import { ApiError } from "@/lib/api/client";
 import { AllocationPieChart } from "@/components/AllocationPieChart";
 import { PortfolioHistoryChart } from "@/components/PortfolioHistoryChart";
 import { PortfolioSnapshotExport } from "@/components/PortfolioSnapshotExport";
+import { PortfolioTransactionHistory } from "@/components/PortfolioTransactionHistory";
 import {
   ALLOCATABLE_CURRENCIES,
   createPortfolio,
   fetchPortfolio,
   fetchPortfolioHistory,
   fetchPortfolioSnapshot,
+  fetchPortfolioTransactions,
   formatMoney,
   previewPortfolioHoldings,
   getStoredPortfolioId,
@@ -69,6 +71,9 @@ export function PortfolioDashboard() {
   > | null>(null);
   const [showCalc, setShowCalc] = useState(false);
   const [history, setHistory] = useState<Awaited<ReturnType<typeof fetchPortfolioHistory>> | null>(null);
+  const [transactions, setTransactions] = useState<
+    Awaited<ReturnType<typeof fetchPortfolioTransactions>> | null
+  >(null);
   const [snapshot, setSnapshot] = useState<Awaited<ReturnType<typeof fetchPortfolioSnapshot>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -98,9 +103,11 @@ export function PortfolioDashboard() {
         setDraft(holdingsToDraftWeights(data.holdings_detail));
         const chart = await fetchPortfolioHistory(data.id, 30);
         const exportSnapshot = await fetchPortfolioSnapshot(data.id);
+        const ledger = await fetchPortfolioTransactions(data.id);
         if (!cancelled) {
           setHistory(chart);
           setSnapshot(exportSnapshot);
+          setTransactions(ledger);
         }
       } catch (err) {
         if (cancelled) {
@@ -165,6 +172,7 @@ export function PortfolioDashboard() {
       setPreviewResult(null);
       setHistory(await fetchPortfolioHistory(updated.id, 30));
       setSnapshot(await fetchPortfolioSnapshot(updated.id));
+      setTransactions(await fetchPortfolioTransactions(updated.id));
     } catch (err) {
       if (err instanceof ApiError) {
         setError("Could not save allocation. Check weights sum to 100%.");
@@ -335,11 +343,10 @@ export function PortfolioDashboard() {
                   max={100}
                   step={0.1}
                   value={draft[code] ?? 0}
-                  onChange={(event) =>
-                    setDraft((current) =>
-                      applySliderChange(current, code, Number(event.currentTarget.value)),
-                    )
-                  }
+                  onChange={(event) => {
+                    const nextPercent = Number(event.currentTarget.value);
+                    setDraft((current) => applySliderChange(current, code, nextPercent));
+                  }}
                   className="w-full accent-emerald-400"
                 />
               </div>
@@ -482,6 +489,15 @@ export function PortfolioDashboard() {
         />
       ) : (
         <div className="h-48 animate-pulse rounded-lg bg-zinc-900/40" />
+      )}
+
+      {transactions ? (
+        <PortfolioTransactionHistory
+          transactions={transactions.transactions}
+          baseCurrency={portfolio.base_currency}
+        />
+      ) : (
+        <div className="h-32 animate-pulse rounded-lg bg-zinc-900/40" />
       )}
 
       <PortfolioSnapshotExport snapshot={snapshot} baseCurrency={portfolio.base_currency} />

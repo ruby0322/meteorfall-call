@@ -8,6 +8,7 @@ from app.schemas.portfolio import (
     PortfolioHistoryResponse,
     PortfolioResponse,
     PortfolioSnapshotResponse,
+    PortfolioTransactionsResponse,
     PreviewHoldingsResponse,
     UpdateBaseCurrencyRequest,
     UpdateHoldingsRequest,
@@ -19,6 +20,7 @@ from app.services.portfolio import (
     portfolio_history_response,
     portfolio_snapshot_response,
     portfolio_to_response,
+    portfolio_transactions_response,
     preview_portfolio_holdings,
     switch_portfolio_base_currency,
     update_portfolio_holdings,
@@ -94,6 +96,15 @@ def portfolio_snapshot(
 ) -> dict:
     portfolio = get_portfolio_or_404(db, portfolio_id)
     return portfolio_snapshot_response(portfolio, frankfurter)
+
+
+@router.get("/portfolio/{portfolio_id}/transactions", response_model=PortfolioTransactionsResponse)
+def portfolio_transactions(
+    portfolio_id: str,
+    db: DbSession,
+) -> dict:
+    portfolio = get_portfolio_or_404(db, portfolio_id)
+    return portfolio_transactions_response(portfolio)
 
 
 @router.patch("/portfolio/{portfolio_id}/base-currency", response_model=PortfolioResponse)

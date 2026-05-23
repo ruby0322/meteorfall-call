@@ -495,6 +495,49 @@ def portfolio_snapshot_response(
     }
 
 
+def _infer_transaction_event_type(
+    index: int,
+    record: RebalanceRecord,
+    previous: RebalanceRecord | None,
+) -> str:
+    if index == 0:
+        return "initial"
+    if previous is not None and record.base_currency != previous.base_currency:
+        return "base_currency_switch"
+    return "rebalance"
+
+
+def portfolio_transactions_response(portfolio: Portfolio) -> dict:
+    records = sorted(portfolio.rebalance_records, key=lambda item: item.created_at)
+    transactions = []
+    for index, record in enumerate(records):
+        previous = records[index - 1] if index > 0 else None
+        rows = _parse_snapshot_rows(record.holdings_json)
+        transactions.append(
+            {
+                "id": record.id,
+                "event_type": _infer_transaction_event_type(index, record, previous),
+                "base_currency": record.base_currency,
+                "effective_rates_date": record.effective_rates_date,
+                "total_value_usd": record.total_value_usd,
+                "holdings": [
+                    {
+                        "currency_code": code,
+                        "weight_percent": weight,
+                        "quantity": quantity,
+                    }
+                    for code, weight, quantity in rows
+                ],
+                "created_at": record.created_at.isoformat(),
+            }
+        )
+
+    return {
+        "base_currency": portfolio.base_currency,
+        "transactions": list(reversed(transactions)),
+    }
+
+
 def switch_portfolio_base_currency(
     db: Session,
     portfolio: Portfolio,
