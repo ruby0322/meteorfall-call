@@ -14,3 +14,10 @@ body {
   color: var(--foreground);
   background: var(--background);
 }
+
+.terminal-grid {
+  background-image:
+    linear-gradient(rgba(16, 185, 129, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
