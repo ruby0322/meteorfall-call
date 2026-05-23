@@ -3,12 +3,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, status
 
 from app.api.deps.db import DbSession
-from app.schemas.portfolio import PortfolioResponse, UpdateHoldingsRequest
+from app.schemas.portfolio import PortfolioResponse, PreviewHoldingsResponse, UpdateHoldingsRequest
 from app.services.frankfurter import FrankfurterClientProtocol
 from app.services.portfolio import (
     create_default_portfolio,
     get_portfolio_or_404,
     portfolio_to_response,
+    preview_portfolio_holdings,
     update_portfolio_holdings,
 )
 
@@ -48,3 +49,15 @@ def replace_portfolio_holdings(
     portfolio = get_portfolio_or_404(db, portfolio_id)
     weights = [(item.currency_code, item.weight_percent) for item in payload.holdings]
     return update_portfolio_holdings(db, portfolio, weights, frankfurter)
+
+
+@router.post("/portfolio/{portfolio_id}/holdings/preview", response_model=PreviewHoldingsResponse)
+def preview_holdings(
+    portfolio_id: str,
+    payload: UpdateHoldingsRequest,
+    db: DbSession,
+    frankfurter: Annotated[FrankfurterClientProtocol, Depends(get_frankfurter)],
+) -> dict:
+    portfolio = get_portfolio_or_404(db, portfolio_id)
+    weights = [(item.currency_code, item.weight_percent) for item in payload.holdings]
+    return preview_portfolio_holdings(portfolio, weights, frankfurter)

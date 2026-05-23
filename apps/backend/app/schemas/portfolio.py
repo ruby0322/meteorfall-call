@@ -29,10 +29,30 @@ class HoldingResponse(BaseModel):
     quantity: float
 
 
+class HoldingDetailResponse(HoldingResponse):
+    usd_value: float
+    weight_actual_percent: float
+
+
+class HoldingDeltaResponse(BaseModel):
+    currency_code: str
+    quantity_delta: float
+    usd_delta: float
+
+
 class PortfolioResponse(BaseModel):
     id: str
     initial_cash_usd: float
     total_value_usd: float
     daily_pl_usd: float
+    cumulative_pl_usd: float
     rates_date: str | None
+    prior_rates_date: str | None
     holdings: list[HoldingResponse]
+    holdings_detail: list[HoldingDetailResponse]
+
+
+class PreviewHoldingsResponse(BaseModel):
+    total_value_usd: float
+    projected_holdings: list[HoldingDetailResponse]
+    deltas: list[HoldingDeltaResponse]

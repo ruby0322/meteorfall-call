@@ -6,18 +6,38 @@ export type Holding = {
   quantity: number;
 };
 
+export type HoldingDetail = Holding & {
+  usd_value: number;
+  weight_actual_percent: number;
+};
+
+export type HoldingDelta = {
+  currency_code: string;
+  quantity_delta: number;
+  usd_delta: number;
+};
+
 export type Portfolio = {
   id: string;
   initial_cash_usd: number;
   total_value_usd: number;
   daily_pl_usd: number;
+  cumulative_pl_usd: number;
   rates_date: string | null;
+  prior_rates_date: string | null;
   holdings: Holding[];
+  holdings_detail: HoldingDetail[];
 };
 
 export type AllocationInput = {
   currency_code: string;
   weight_percent: number;
+};
+
+export type PreviewHoldingsResponse = {
+  total_value_usd: number;
+  projected_holdings: HoldingDetail[];
+  deltas: HoldingDelta[];
 };
 
 const PORTFOLIO_STORAGE_KEY = "marketmage-portfolio-id";
@@ -47,6 +67,17 @@ export async function updatePortfolioHoldings(
 ): Promise<Portfolio> {
   return apiFetch<Portfolio>(`/v1/portfolio/${portfolioId}/holdings`, {
     method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ holdings }),
+  });
+}
+
+export async function previewPortfolioHoldings(
+  portfolioId: string,
+  holdings: AllocationInput[],
+): Promise<PreviewHoldingsResponse> {
+  return apiFetch<PreviewHoldingsResponse>(`/v1/portfolio/${portfolioId}/holdings/preview`, {
+    method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ holdings }),
   });

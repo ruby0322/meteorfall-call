@@ -1,4 +1,5 @@
 import uuid
+from datetime import date, timedelta
 from typing import TypedDict
 
 from fastapi import HTTPException, status
@@ -11,6 +12,14 @@ from app.services.frankfurter import FrankfurterClientProtocol
 class HoldingQuantity(TypedDict):
     currency_code: str
     quantity: float
+
+
+class HoldingDetail(TypedDict):
+    currency_code: str
+    weight_percent: float
+    weight_actual_percent: float
+    quantity: float
+    usd_value: float
 
 
 def compute_portfolio_value_usd(
@@ -64,6 +73,67 @@ def fetch_latest_rates(
     return payload["date"], payload["rates"]
 
 
+def _to_quantities(holdings: list[Holding]) -> list[HoldingQuantity]:
+    return [
+        {"currency_code": holding.currency_code, "quantity": holding.quantity}
+        for holding in holdings
+    ]
+
+
+def _resolve_usd_value(currency_code: str, quantity: float, rates: dict[str, float]) -> float:
+    if currency_code == "USD":
+        return round(quantity, 2)
+    rate = rates.get(currency_code)
+    if rate is None or rate == 0:
+        raise ValueError(f"Missing or invalid rate for {currency_code}")
+    return round(quantity / rate, 2)
+
+
+def _build_holding_details(
+    rows: list[tuple[str, float, float]],
+    total_value_usd: float,
+    rates: dict[str, float],
+) -> list[HoldingDetail]:
+    details: list[HoldingDetail] = []
+    for currency_code, weight_percent, quantity in rows:
+        usd_value = _resolve_usd_value(currency_code, quantity, rates)
+        actual_weight = 0.0 if total_value_usd == 0 else round(usd_value / total_value_usd * 100, 2)
+        details.append(
+            {
+                "currency_code": currency_code,
+                "weight_percent": round(weight_percent, 4),
+                "weight_actual_percent": actual_weight,
+                "quantity": round(quantity, 6),
+                "usd_value": usd_value,
+            }
+        )
+    return details
+
+
+def _find_prior_business_day_rates(
+    frankfurter: FrankfurterClientProtocol,
+    currencies: list[str],
+    current_rates_date: str,
+) -> tuple[str | None, dict[str, float]]:
+    non_usd = sorted({code for code in currencies if code != "USD"})
+    if not non_usd:
+        return None, {}
+
+    end_day = date.fromisoformat(current_rates_date)
+    start_day = end_day - timedelta(days=10)
+    payload = frankfurter.fetch_history("USD", non_usd, start_day.isoformat(), end_day.isoformat())
+    rates_by_date = payload.get("rates", {})
+    available_dates = sorted(rates_by_date.keys())
+
+    prior_dates = [day for day in available_dates if day < current_rates_date]
+    if not prior_dates:
+        return None, {}
+
+    prior_date = prior_dates[-1]
+    prior_rates = rates_by_date.get(prior_date, {})
+    return prior_date, prior_rates
+
+
 def create_default_portfolio(db: Session) -> Portfolio:
     portfolio = Portfolio(
         id=str(uuid.uuid4()),
@@ -98,19 +168,31 @@ def portfolio_to_response(
     holdings = portfolio.holdings
     currency_codes = [holding.currency_code for holding in holdings]
     rates_date, rates = fetch_latest_rates(frankfurter, currency_codes)
-    quantities = [
-        {"currency_code": holding.currency_code, "quantity": holding.quantity}
-        for holding in holdings
-    ]
+    quantities = _to_quantities(holdings)
     total_value = compute_portfolio_value_usd(quantities, rates)
-    daily_pl = round(total_value - portfolio.prior_value_usd, 2)
+    rows = [(holding.currency_code, holding.weight_percent, holding.quantity) for holding in holdings]
+
+    prior_rates_date: str | None = None
+    prior_total_value = total_value
+    if rates_date:
+        prior_rates_date, prior_rates = _find_prior_business_day_rates(
+            frankfurter, currency_codes, rates_date
+        )
+        if prior_rates_date:
+            prior_total_value = compute_portfolio_value_usd(quantities, prior_rates)
+
+    daily_pl = round(total_value - prior_total_value, 2)
+    cumulative_pl = round(total_value - portfolio.initial_cash_usd, 2)
+    holdings_detail = _build_holding_details(rows, total_value, rates)
 
     return {
         "id": portfolio.id,
         "initial_cash_usd": portfolio.initial_cash_usd,
         "total_value_usd": total_value,
         "daily_pl_usd": daily_pl,
+        "cumulative_pl_usd": cumulative_pl,
         "rates_date": rates_date or portfolio.rates_date,
+        "prior_rates_date": prior_rates_date,
         "holdings": [
             {
                 "currency_code": holding.currency_code,
@@ -119,6 +201,55 @@ def portfolio_to_response(
             }
             for holding in holdings
         ],
+        "holdings_detail": holdings_detail,
+    }
+
+
+def preview_portfolio_holdings(
+    portfolio: Portfolio,
+    weights: list[tuple[str, float]],
+    frankfurter: FrankfurterClientProtocol,
+) -> dict:
+    existing_rows = [
+        (holding.currency_code, holding.weight_percent, holding.quantity) for holding in portfolio.holdings
+    ]
+    existing_quantities = _to_quantities(portfolio.holdings)
+    existing_currency_codes = [holding.currency_code for holding in portfolio.holdings]
+    existing_rates_date, existing_rates = fetch_latest_rates(frankfurter, existing_currency_codes)
+    current_total = compute_portfolio_value_usd(existing_quantities, existing_rates)
+
+    preview_currency_codes = [code for code, _ in weights]
+    _, preview_rates = fetch_latest_rates(frankfurter, preview_currency_codes)
+    preview_rows = build_quantities_from_weights(current_total, weights, preview_rates)
+    projected_quantities = [{"currency_code": code, "quantity": qty} for code, _, qty in preview_rows]
+    projected_total = compute_portfolio_value_usd(projected_quantities, preview_rates)
+    projected_details = _build_holding_details(preview_rows, projected_total, preview_rates)
+
+    by_currency_current = {
+        currency_code: {"quantity": quantity, "usd_value": _resolve_usd_value(currency_code, quantity, existing_rates)}
+        for currency_code, _, quantity in existing_rows
+    }
+    by_currency_projected = {item["currency_code"]: item for item in projected_details}
+    currencies = sorted(set(by_currency_current.keys()) | set(by_currency_projected.keys()))
+    deltas = []
+    for code in currencies:
+        current_quantity = by_currency_current.get(code, {}).get("quantity", 0.0)
+        current_usd = by_currency_current.get(code, {}).get("usd_value", 0.0)
+        projected_quantity = by_currency_projected.get(code, {}).get("quantity", 0.0)
+        projected_usd = by_currency_projected.get(code, {}).get("usd_value", 0.0)
+        deltas.append(
+            {
+                "currency_code": code,
+                "quantity_delta": round(projected_quantity - current_quantity, 6),
+                "usd_delta": round(projected_usd - current_usd, 2),
+            }
+        )
+
+    return {
+        "total_value_usd": projected_total,
+        "projected_holdings": projected_details,
+        "deltas": deltas,
+        "rates_date": existing_rates_date,
     }
 
 
@@ -128,9 +259,14 @@ def update_portfolio_holdings(
     weights: list[tuple[str, float]],
     frankfurter: FrankfurterClientProtocol,
 ) -> dict:
-    currency_codes = [code for code, _ in weights]
-    rates_date, rates = fetch_latest_rates(frankfurter, currency_codes)
-    rows = build_quantities_from_weights(portfolio.initial_cash_usd, weights, rates)
+    existing_quantities = _to_quantities(portfolio.holdings)
+    existing_currency_codes = [holding.currency_code for holding in portfolio.holdings]
+    _, existing_rates = fetch_latest_rates(frankfurter, existing_currency_codes)
+    current_total = compute_portfolio_value_usd(existing_quantities, existing_rates)
+
+    preview_currency_codes = [code for code, _ in weights]
+    rates_date, rates = fetch_latest_rates(frankfurter, preview_currency_codes)
+    rows = build_quantities_from_weights(current_total, weights, rates)
 
     portfolio.holdings.clear()
     for currency_code, weight_percent, quantity in rows:
