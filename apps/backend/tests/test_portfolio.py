@@ -7,7 +7,6 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import Settings
 from app.db.init_db import init_database
-from app.db.models import Base
 from app.main import create_app
 from app.services.portfolio import compute_portfolio_value_usd
 
